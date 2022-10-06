@@ -1,14 +1,39 @@
 import fs from 'fs'
 import path from 'path'
-import { XMLParser } from 'fast-xml-parser'
+import { XMLParser, XMLBuilder } from 'fast-xml-parser'
 
 class ProcessXBRLUseCase {
   public async execute(): Promise<void> {
-    const filePath = path.join(__dirname, '..', 'template', 'modelo.xml')
-    fs.readFile(filePath, (error, data) => {
-      const parser = new XMLParser({ ignoreAttributes: false })
-      const template = parser.parse(data)
-      console.log(Object.keys(template))
+    const caminhoDoArquivo = path.join(__dirname, '..', 'template', 'modelo.xml')
+    fs.readFile(caminhoDoArquivo, (erro, dados) => {
+      const tradutorXML = new XMLParser({ ignoreAttributes: false, ignoreDeclaration: true })
+      const construtorXML = new XMLBuilder({ ignoreAttributes: false })
+      const objetoXML = tradutorXML.parse(dados)
+      //console.log(objetoXML, '\n')
+
+      const xbrlTag = Object.keys(objetoXML)[0]
+
+      const xbrlElemento = {
+        [xbrlTag]: {}
+      }
+
+      const arrayXBRL = Object.entries(objetoXML[xbrlTag])
+
+      const xbrlAttributos = arrayXBRL.filter(linha => linha[0].includes('@_'))
+
+      // adiciona os atributos
+      xbrlAttributos.forEach(linha => {
+        Object.assign(xbrlElemento[xbrlTag], { [linha[0]]: linha[1] })
+      })
+
+      const xbrlFilhos = arrayXBRL.filter(linha => !linha[0].includes('@_'))
+
+      xbrlFilhos.forEach(linha => {
+        Object.assign(xbrlElemento[xbrlTag], { [linha[0]]: linha[1]})
+      })
+
+      const saida = construtorXML.build(xbrlElemento)
+      console.log(saida)
     })
   }
 }
