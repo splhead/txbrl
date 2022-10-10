@@ -2,17 +2,48 @@ import fs from 'fs'
 import path from 'path'
 import { XMLParser, XMLBuilder } from 'fast-xml-parser'
 
+type Elemento = {
+  [K: string]: Elemento | Array<Elemento> | string
+}
+type ParsedElement = {
+  [K: string]: Elemento | [ParsedElement] | string
+}
+// type First<T extends Element> = {
+//   [K in keyof T]: T[K] extends [infer Head, ...Array<infer Tail>] ? [Head extends Element ? First<Head> : never] : never
+// }
+
+function getFirstChild(element: Elemento): ParsedElement {
+  const entries = Object.entries(element)
+
+  return Object.fromEntries(
+    entries.map(([key, value]) => {
+      if (key === 'gl-cor:accountMainID') {
+        console.log(value)
+      }
+
+      if (Array.isArray(value)) {
+        const [head] = value
+
+        return [key, [getFirstChild(head)]]
+      }
+      if (typeof value === 'string' || typeof value === 'number') {
+        return [key, value]
+      }
+      return [key, getFirstChild(value)]
+    })
+  )
+}
+
+// console.log(
+//   JSON.stringify(
+//     getFirstChild({
+//       first: [{ second: { third: 'hello third' } }, { second2: 'hello' }]
+//     })
+//   )
+// )
 class ProcessXBRLUseCase {
   private eObjeto(valor: unknown): boolean {
     return valor !== null && !Array.isArray(valor) && typeof valor === 'object'
-  }
-
-  private mesclaObjetos(
-    objeto: Record<string, unknown>,
-    objeto2: Record<string, unknown>
-  ): Record<string, unknown> {
-    Object.assign(objeto, objeto2)
-    return objeto
   }
 
   public async execute(): Promise<void> {
@@ -33,35 +64,51 @@ class ProcessXBRLUseCase {
 
       const xbrlTag = Object.keys(objetoXML)[0]
 
-      const xbrlElemento = {
+      const objetoXBRL = {
         [xbrlTag]: {}
       }
 
       const arrayXBRL = Object.entries(objetoXML[xbrlTag])
 
       // obtem os atributos
-      const xbrlAttributos = arrayXBRL.filter((posicao) =>
-        posicao[0].startsWith('@_')
-      )
+      const xbrlAttributos = arrayXBRL.filter(([nome]) => nome.startsWith('@_'))
 
       // adiciona os atributos
-      xbrlAttributos.forEach((posicao) => {
-        Object.assign(xbrlElemento[xbrlTag], { [posicao[0]]: posicao[1] })
+      xbrlAttributos.forEach(([nome, valor]) => {
+        Object.assign(objetoXBRL[xbrlTag], { [nome]: valor })
       })
 
-      const xbrlFilhos = arrayXBRL.filter(
-        (posicao) => !posicao[0].startsWith('@_')
-      )
+      const xbrlFilhos = arrayXBRL.filter(([nome]) => !nome.startsWith('@_'))
 
-      xbrlFilhos.forEach((posicao) => {
-        console.log({ [posicao[0]]: posicao[1] }, this.eObjeto(posicao[1]))
-        if (posicao[0] === 'gl-cor:accountingEntries') {
-          Object.assign(xbrlElemento[xbrlTag], { [posicao[0]]: posicao[1] })
+      const element = Object.fromEntries(xbrlFilhos) as ParsedElement
+
+      const xbrlSimplificado = getFirstChild(element)
+      console.log('Testando', JSON.stringify(xbrlSimplificado))
+      Object.assign(objetoXBRL[xbrlTag], xbrlSimplificado)
+
+      // xbrlFilhos.forEach(([nome, valor]) => {
+
+      //   console.log({ [nome]: valor }, this.eObjeto(valor))
+      //   // if (nome === 'gl-cor:accountingEntries') {
+      //   //this.simplificaObjeto({ [nome]: valor })
+      //   Object.assign(objetoXBRL[xbrlTag], { [nome]: valor })
+      //   // }
+      // })
+
+      //console.log('\n\n\n', objetoXBRL)
+      const saida = construtorXML.build(objetoXBRL)
+      const caminhoDoArquivoSaida = path.join(
+        __dirname,
+        '..',
+        'template',
+        'saida.xml'
+      )
+      fs.writeFile(caminhoDoArquivoSaida, saida, (erro) => {
+        if (erro) {
+          console.error(erro)
         }
       })
 
-      console.log('\n\n\n', xbrlElemento)
-      //const saida = construtorXML.build(xbrlElemento)
       //console.log(saida)
     })
   }
