@@ -2,37 +2,15 @@ import fs from 'fs'
 import path from 'path'
 import { XMLParser, XMLBuilder } from 'fast-xml-parser'
 
-type Elemento = {
-  [K: string]: Elemento | Array<Elemento> | string
+type Element = {
+  [K: string]: Element | Array<Element> | string
 }
 type ParsedElement = {
-  [K: string]: Elemento | [ParsedElement] | string
+  [K: string]: Element | [ParsedElement] | string
 }
 // type First<T extends Element> = {
 //   [K in keyof T]: T[K] extends [infer Head, ...Array<infer Tail>] ? [Head extends Element ? First<Head> : never] : never
 // }
-
-function getFirstChild(element: Elemento): ParsedElement {
-  const entries = Object.entries(element)
-
-  return Object.fromEntries(
-    entries.map(([key, value]) => {
-      if (key === 'gl-cor:accountMainID') {
-        console.log(value)
-      }
-
-      if (Array.isArray(value)) {
-        const [head] = value
-
-        return [key, [getFirstChild(head)]]
-      }
-      if (typeof value === 'string' || typeof value === 'number') {
-        return [key, value]
-      }
-      return [key, getFirstChild(value)]
-    })
-  )
-}
 
 // console.log(
 //   JSON.stringify(
@@ -42,7 +20,27 @@ function getFirstChild(element: Elemento): ParsedElement {
 //   )
 // )
 class ProcessXBRLUseCase {
-  private eObjeto(valor: unknown): boolean {
+  private simplifyObject(element: Element): ParsedElement {
+    const entries = Object.entries(element)
+
+    return Object.fromEntries(
+      entries.map(([key, value]) => {
+        if (Array.isArray(value)) {
+          const [head] = value
+
+          if (!head) throw new Error(`Arquivo inválido! ${key}`)
+
+          return [key, [this.simplifyObject(head)]]
+        }
+        if (typeof value === 'string' || typeof value === 'number') {
+          return [key, value]
+        }
+        return [key, this.simplifyObject(value)]
+      })
+    )
+  }
+
+  private isObject(valor: unknown): boolean {
     return valor !== null && !Array.isArray(valor) && typeof valor === 'object'
   }
 
@@ -54,37 +52,37 @@ class ProcessXBRLUseCase {
       'modelo.xml'
     )
     fs.readFile(caminhoDoArquivo, (erro, dados) => {
-      const tradutorXML = new XMLParser({
+      const parser = new XMLParser({
         ignoreAttributes: false,
         ignoreDeclaration: true
       })
-      const construtorXML = new XMLBuilder({ ignoreAttributes: false })
-      const objetoXML = tradutorXML.parse(dados)
+      const builder = new XMLBuilder({ ignoreAttributes: false })
+      const objectXML = parser.parse(dados)
       //console.log(objetoXML, '\n')
 
-      const xbrlTag = Object.keys(objetoXML)[0]
+      const xbrlTag = Object.keys(objectXML)[0]
 
-      const objetoXBRL = {
+      const objectXBRL = {
         [xbrlTag]: {}
       }
 
-      const arrayXBRL = Object.entries(objetoXML[xbrlTag])
+      const arrayXBRL = Object.entries(objectXML[xbrlTag])
 
       // obtem os atributos
-      const xbrlAttributos = arrayXBRL.filter(([nome]) => nome.startsWith('@_'))
+      const xbrlAttributes = arrayXBRL.filter(([name]) => name.startsWith('@_'))
 
       // adiciona os atributos
-      xbrlAttributos.forEach(([nome, valor]) => {
-        Object.assign(objetoXBRL[xbrlTag], { [nome]: valor })
+      xbrlAttributes.forEach(([name, value]) => {
+        Object.assign(objectXBRL[xbrlTag], { [name]: value })
       })
 
-      const xbrlFilhos = arrayXBRL.filter(([nome]) => !nome.startsWith('@_'))
+      const xbrlChildren = arrayXBRL.filter(([name]) => !name.startsWith('@_'))
 
-      const element = Object.fromEntries(xbrlFilhos) as ParsedElement
+      const element = Object.fromEntries(xbrlChildren) as ParsedElement
 
-      const xbrlSimplificado = getFirstChild(element)
-      console.log('Testando', JSON.stringify(xbrlSimplificado))
-      Object.assign(objetoXBRL[xbrlTag], xbrlSimplificado)
+      const xbrlSimplified = this.simplifyObject(element)
+      //console.log('Testando', JSON.stringify(xbrlSimplificado))
+      Object.assign(objectXBRL[xbrlTag], xbrlSimplified)
 
       // xbrlFilhos.forEach(([nome, valor]) => {
 
@@ -96,31 +94,17 @@ class ProcessXBRLUseCase {
       // })
 
       //console.log('\n\n\n', objetoXBRL)
-      const saida = construtorXML.build(objetoXBRL)
-      const caminhoDoArquivoSaida = path.join(
-        __dirname,
-        '..',
-        'template',
-        'saida.xml'
-      )
-      fs.writeFile(caminhoDoArquivoSaida, saida, (erro) => {
-        if (erro) {
-          console.error(erro)
+      const out = builder.build(objectXBRL)
+      const outPath = path.join(__dirname, '..', 'template', 'saida.xml')
+      fs.writeFile(outPath, out, (error) => {
+        if (error) {
+          console.error(error)
         }
       })
 
-      //console.log(saida)
+      //console.log(out)
     })
   }
 }
 
 export { ProcessXBRLUseCase }
-
-// type Structure<T extends string> = Partial<Record<T, Structure<T>>>
-
-// type Exemplo2<T1 extends string, T2 extends string> = `${T1}:${T2}`
-
-// type Exemplo3 = Exemplo2<string, string>
-// type Exemplo = Structure<Exemplo3>
-
-// const exemplo: Exemplo = { 'teste:dasdf': { 'test:asdf': 2 } }
