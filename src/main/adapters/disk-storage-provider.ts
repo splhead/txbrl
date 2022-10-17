@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import uploadConfig from '../config/upload'
 
-import { StorageProvider } from '@/usecases/ports/storage-provider'
+import { StorageProvider } from '@/usecases/upload-file/ports/storage-provider'
 
 class DiskStorageProvider implements StorageProvider {
   public async saveFile(file: string): Promise<string> {

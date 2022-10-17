@@ -1,4 +1,4 @@
-import { DataSource } from '@/usecases/ports/datasources'
+import { DataSource } from '@/usecases/datasources/ports/datasources'
 import { ConnectionOptions } from 'mysql2'
 
 class MysqlDatasource implements DataSource {

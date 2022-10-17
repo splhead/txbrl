@@ -1,4 +1,4 @@
-import { DataSource } from '@/usecases/ports/datasources'
+import { DataSource } from '@/usecases/datasources/ports/datasources'
 
 class PostgresDatasource implements DataSource {
   getData(query: string): Promise<void> {
